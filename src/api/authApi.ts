@@ -28,3 +28,28 @@ export const fetchApplications = async (): Promise<ApplicationInfo[]> => {
   const { data } = await api.get('/auth/applications')
   return data.data
 }
+
+export const registerApplication = async (body: {
+  name: string
+  redirectUrl: string
+  redirectType: string
+}): Promise<string> => {
+  const { data } = await api.post('/auth/applications', body)
+  return data.data
+}
+
+export const registerOAuthProvider = async (body: {
+  applicationId: string
+  provider: string
+  clientId: string
+  clientSecret?: string
+}): Promise<void> => {
+  await api.post('/auth/applications/oauth', body)
+}
+
+export const registerDomain = async (body: {
+  applicationId: string
+  domains: string[]
+}): Promise<void> => {
+  await api.post('/auth/applications/domain', body)
+}
