@@ -30,9 +30,9 @@ const sections: NavSection[] = [
     title: 'Services',
     items: [
       { label: 'Forest Supporters', path: '/forest/supporters' },
-      { label: 'Barbellrobot', path: '/barbellrobot/members' },
+      { label: 'BBR Exercises', path: '/barbellrobot/exercises' },
+      { label: 'MV Rewards', path: '/mirror-view/rewards' },
       { label: 'Animal', path: '/animal/posts' },
-      { label: 'Mirror View', path: '/mirror-view/quizzes' },
       { label: 'Storage', path: '/storage/files' },
     ],
   },
