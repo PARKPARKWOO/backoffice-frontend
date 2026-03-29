@@ -62,7 +62,7 @@ export default function ApiKeyManagement() {
           </div>
           <button
             className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 disabled:opacity-50"
-            disabled={!form.applicationId || !form.apiKey || createMutation.isPending}
+            disabled={!form.apiKey || createMutation.isPending}
             onClick={() => createMutation.mutate(form)}
           >
             Register
