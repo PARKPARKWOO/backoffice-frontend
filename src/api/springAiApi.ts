@@ -23,12 +23,10 @@ export const fetchApiKeys = async (applicationId?: string) => {
 }
 
 export const createApiKey = async (body: {
-  applicationId: string
+  applicationId?: string
   vendor: string
   apiKey: string
   description?: string
-  projectId?: string
-  location?: string
 }) => {
   const { data } = await api.post('/spring-ai/api-keys', body)
   return data.data

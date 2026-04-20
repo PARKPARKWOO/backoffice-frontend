@@ -8,7 +8,7 @@ export default function ApiKeyManagement() {
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
-    applicationId: '', vendor: 'OPENAI', apiKey: '', description: '', projectId: '', location: '',
+    applicationId: '', vendor: 'OPENAI', apiKey: '', description: '',
   })
 
   const { data: apiKeys, isLoading } = useQuery({
@@ -21,7 +21,7 @@ export default function ApiKeyManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] })
       setShowForm(false)
-      setForm({ applicationId: '', vendor: 'OPENAI', apiKey: '', description: '', projectId: '', location: '' })
+      setForm({ applicationId: '', vendor: 'OPENAI', apiKey: '', description: '' })
     },
   })
 
@@ -53,12 +53,6 @@ export default function ApiKeyManagement() {
             </select>
             <input className="border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="API Key" value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} />
             <input className="border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            {form.vendor === 'GOOGLE' && (
-              <>
-                <input className="border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="Project ID" value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} />
-                <input className="border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="Location (e.g. us-central1)" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-              </>
-            )}
           </div>
           <button
             className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 disabled:opacity-50"
