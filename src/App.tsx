@@ -8,6 +8,7 @@ import AuthorityManagement from './pages/auth/AuthorityManagement'
 import ClientManagement from './pages/spring-ai/ClientManagement'
 import ApiKeyManagement from './pages/spring-ai/ApiKeyManagement'
 import PricingPolicies from './pages/spring-ai/PricingPolicies'
+import RateLimitPolicies from './pages/spring-ai/RateLimitPolicies'
 import SupporterManagement from './pages/forest/SupporterManagement'
 import ExerciseManagement from './pages/barbellrobot/ExerciseManagement'
 import RewardManagement from './pages/mirror-view/RewardManagement'
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/spring-ai/clients" element={<ClientManagement />} />
         <Route path="/spring-ai/api-keys" element={<ApiKeyManagement />} />
         <Route path="/spring-ai/pricing" element={<PricingPolicies />} />
+        <Route path="/spring-ai/rate-limits" element={<RateLimitPolicies />} />
         <Route path="/forest/supporters" element={<SupporterManagement />} />
         <Route path="/barbellrobot/exercises" element={<ExerciseManagement />} />
         <Route path="/mirror-view/rewards" element={<RewardManagement />} />

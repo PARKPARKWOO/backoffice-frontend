@@ -56,3 +56,30 @@ export const createPricingPolicy = async (body: {
 export const deletePricingPolicy = async (id: number) => {
   await api.delete(`/spring-ai/pricing-policies/${id}`)
 }
+
+// Rate Limit Policies
+export const fetchRateLimitPolicies = async () => {
+  const { data } = await api.get('/spring-ai/rate-limit-policies')
+  return data.data?.data ?? data.data ?? []
+}
+
+export const createRateLimitPolicy = async (body: {
+  vendor: string
+  tier: string
+  applicationId?: string | null
+  rpm: number
+  rpd: number
+}) => {
+  const { data } = await api.post('/spring-ai/rate-limit-policies', body)
+  return data.data
+}
+
+export const updateRateLimitPolicy = async (params: { id: number; rpm: number; rpd: number }) => {
+  const { id, rpm, rpd } = params
+  const { data } = await api.put(`/spring-ai/rate-limit-policies/${id}`, { rpm, rpd })
+  return data.data
+}
+
+export const deleteRateLimitPolicy = async (id: number) => {
+  await api.delete(`/spring-ai/rate-limit-policies/${id}`)
+}

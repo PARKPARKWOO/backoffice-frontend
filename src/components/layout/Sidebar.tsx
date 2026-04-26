@@ -24,6 +24,7 @@ const sections: NavSection[] = [
       { label: 'Clients', path: '/spring-ai/clients' },
       { label: 'API Keys', path: '/spring-ai/api-keys' },
       { label: 'Pricing Policies', path: '/spring-ai/pricing' },
+      { label: 'Rate Limits', path: '/spring-ai/rate-limits' },
     ],
   },
   {
