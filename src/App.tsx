@@ -13,6 +13,9 @@ import SupporterManagement from './pages/forest/SupporterManagement'
 import ExerciseManagement from './pages/barbellrobot/ExerciseManagement'
 import RewardManagement from './pages/mirror-view/RewardManagement'
 import ComingSoon from './pages/ComingSoon'
+import LicenseManagement from './pages/resell/LicenseManagement'
+import SupportMessages from './pages/resell/SupportMessages'
+import ErrorReports from './pages/resell/ErrorReports'
 
 export default function App() {
   return (
@@ -31,6 +34,11 @@ export default function App() {
         <Route path="/forest/supporters" element={<SupporterManagement />} />
         <Route path="/barbellrobot/exercises" element={<ExerciseManagement />} />
         <Route path="/mirror-view/rewards" element={<RewardManagement />} />
+        <Route path="/resell/licenses" element={<LicenseManagement />} />
+        <Route path="/resell/support-messages" element={<SupportMessages />} />
+        <Route path="/resell/support-messages/:supportMessageId" element={<SupportMessages />} />
+        <Route path="/resell/error-reports" element={<ErrorReports />} />
+        <Route path="/resell/error-reports/:errorReportId" element={<ErrorReports />} />
         <Route path="/animal/posts" element={<ComingSoon service="Animal (Find My Pet)" />} />
         <Route path="/storage/files" element={<ComingSoon service="Storage" />} />
       </Route>

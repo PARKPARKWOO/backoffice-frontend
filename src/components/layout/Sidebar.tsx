@@ -28,6 +28,14 @@ const sections: NavSection[] = [
     ],
   },
   {
+    title: 'Resell Ops',
+    items: [
+      { label: '라이선스 관리', path: '/resell/licenses' },
+      { label: '고객 문의함', path: '/resell/support-messages' },
+      { label: '오류 리포트', path: '/resell/error-reports' },
+    ],
+  },
+  {
     title: 'Services',
     items: [
       { label: 'Forest Supporters', path: '/forest/supporters' },
