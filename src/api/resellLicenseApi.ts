@@ -1,6 +1,7 @@
 import api from './axiosInstance'
 import type {
   BackofficeLicense,
+  ActivationSecretReceipt,
   IssueLicenseInput,
   LicenseFilters,
   LicenseList,
@@ -8,6 +9,7 @@ import type {
   LicenseUserSummary,
   RenewLicenseInput,
   RevokeLicenseInput,
+  RotateActivationSecretInput,
 } from '../types/resellLicense'
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -73,6 +75,30 @@ const normalizeLicenses = (value: unknown): LicenseList => {
   return { licenses: source.map(normalizeLicense) }
 }
 
+export const normalizeActivationSecretReceipt = (
+  value: unknown,
+  expectedLicenseUserId: string,
+): ActivationSecretReceipt => {
+  const record = asRecord(unwrapData(value))
+  if (
+    !record ||
+    typeof record.licenseUserId !== 'string' ||
+    !/^[a-z0-9][a-z0-9._-]{3,31}$/.test(record.licenseUserId) ||
+    record.licenseUserId !== expectedLicenseUserId ||
+    typeof record.activationSecret !== 'string' ||
+    !/^rsk_[A-Za-z0-9_-]{43}$/.test(record.activationSecret) ||
+    typeof record.rotatedAt !== 'string' ||
+    !Number.isFinite(Date.parse(record.rotatedAt))
+  ) {
+    throw new Error('활성화 키 응답 형식이 올바르지 않습니다.')
+  }
+  return {
+    licenseUserId: record.licenseUserId,
+    activationSecret: record.activationSecret,
+    rotatedAt: record.rotatedAt,
+  }
+}
+
 const commandHeaders = (revision?: number): Record<string, string> => ({
   'Idempotency-Key': crypto.randomUUID(),
   ...(revision === undefined ? {} : { 'If-Match': String(revision) }),
@@ -124,4 +150,17 @@ export const revokeResellLicense = async (
     { headers: commandHeaders(revision) },
   )
   return normalizeLicense(data)
+}
+
+export const rotateResellActivationSecret = async (
+  licenseUserId: string,
+  body: RotateActivationSecretInput,
+  idempotencyKey: string,
+): Promise<ActivationSecretReceipt> => {
+  const { data } = await api.post(
+    `/resell/license-users/${encodeURIComponent(licenseUserId)}/activation-secret/rotate`,
+    body,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  )
+  return normalizeActivationSecretReceipt(data, licenseUserId)
 }

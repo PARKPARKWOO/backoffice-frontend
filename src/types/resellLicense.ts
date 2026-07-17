@@ -62,6 +62,16 @@ export interface RevokeLicenseInput {
   reason: string
 }
 
+export interface RotateActivationSecretInput {
+  reason: string
+}
+
+export interface ActivationSecretReceipt {
+  licenseUserId: string
+  activationSecret: string
+  rotatedAt: string
+}
+
 export interface LicenseFilters {
   licenseUserId?: string
   planType?: LicensePlanType

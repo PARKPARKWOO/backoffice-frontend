@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import {
@@ -7,8 +7,10 @@ import {
   issueResellLicense,
   renewResellLicense,
   revokeResellLicense,
+  rotateResellActivationSecret,
 } from '../../api/resellLicenseApi'
 import type {
+  ActivationSecretReceipt,
   BackofficeLicense,
   IssueLicenseInput,
   LicensePlanType,
@@ -16,6 +18,10 @@ import type {
   LicenseUserSummary,
   RenewLicenseInput,
 } from '../../types/resellLicense'
+import {
+  requiresFreshActivationRotation,
+  shouldAcceptActivationRotationReceipt,
+} from './activationRotationState'
 
 type ListFilter = 'ALL' | 'UNLICENSED' | LicenseStatus
 type EditorMode = 'ISSUE' | 'RENEW'
@@ -123,6 +129,13 @@ const errorMessage = (error: unknown) => {
   return error instanceof Error ? error.message : '요청을 처리하지 못했습니다.'
 }
 
+const errorCode = (error: unknown): string | null => {
+  const response = typeof error === 'object' && error !== null && 'response' in error
+    ? (error as { response?: { data?: { code?: unknown } } }).response
+    : undefined
+  return typeof response?.data?.code === 'string' ? response.data.code : null
+}
+
 function StatusBadge({ status }: { status: LicenseStatus }) {
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${statusStyles[status]}`}>
@@ -154,6 +167,29 @@ export default function LicenseManagement() {
   const [notice, setNotice] = useState<string | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<BackofficeLicense | null>(null)
   const [revokeReason, setRevokeReason] = useState('')
+  const [rotationTarget, setRotationTarget] = useState<LicenseUserSummary | null>(null)
+  const [rotationReason, setRotationReason] = useState('')
+  const [rotationReceipt, setRotationReceipt] = useState<ActivationSecretReceipt | null>(null)
+  const [rotationError, setRotationError] = useState<string | null>(null)
+  const [rotationBusy, setRotationBusy] = useState(false)
+  const [secretVisible, setSecretVisible] = useState(false)
+  const [secretCopied, setSecretCopied] = useState(false)
+  const [freshRotationRequired, setFreshRotationRequired] = useState(false)
+  const [freshRotationConfirmed, setFreshRotationConfirmed] = useState(false)
+  const [rotationSubmittedReason, setRotationSubmittedReason] = useState<string | null>(null)
+  const rotationIdempotencyKey = useRef<string | null>(null)
+  const rotationGeneration = useRef(0)
+  const rotationInFlight = useRef(false)
+
+  useEffect(() => {
+    if (!rotationBusy && !rotationReceipt) return
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving)
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving)
+  }, [rotationBusy, rotationReceipt])
 
   const usersQuery = useQuery({
     queryKey: ['resell-license-users', search, page],
@@ -237,6 +273,96 @@ export default function LicenseManagement() {
     setNotice(null)
     setEditor({ mode: 'RENEW', user, license })
     setForm(createForm(planType, license))
+  }
+
+  const openRotation = (user: LicenseUserSummary) => {
+    if (rotationInFlight.current) return
+    rotationGeneration.current += 1
+    setNotice(null)
+    setRotationTarget(user)
+    setRotationReason('')
+    setRotationReceipt(null)
+    setRotationError(null)
+    setSecretVisible(false)
+    setSecretCopied(false)
+    setFreshRotationRequired(false)
+    setFreshRotationConfirmed(false)
+    setRotationSubmittedReason(null)
+    rotationIdempotencyKey.current = crypto.randomUUID()
+  }
+
+  const closeRotation = () => {
+    if (rotationInFlight.current) return
+    rotationGeneration.current += 1
+    setRotationTarget(null)
+    setRotationReason('')
+    setRotationReceipt(null)
+    setRotationError(null)
+    setSecretVisible(false)
+    setSecretCopied(false)
+    setFreshRotationRequired(false)
+    setFreshRotationConfirmed(false)
+    setRotationSubmittedReason(null)
+    rotationIdempotencyKey.current = null
+  }
+
+  const rotateActivationSecret = async (useFreshKey = false) => {
+    const target = rotationTarget
+    if (!target || rotationReason.trim().length < 4 || rotationInFlight.current) return
+    if (useFreshKey && !freshRotationConfirmed) return
+
+    const generation = rotationGeneration.current
+    const submittedReason = rotationSubmittedReason ?? rotationReason.trim()
+    const idempotencyKey = useFreshKey
+      ? crypto.randomUUID()
+      : rotationIdempotencyKey.current ?? crypto.randomUUID()
+    rotationIdempotencyKey.current = idempotencyKey
+    rotationInFlight.current = true
+    setRotationSubmittedReason(submittedReason)
+    setRotationBusy(true)
+    setRotationError(null)
+    if (useFreshKey) {
+      setFreshRotationRequired(false)
+      setFreshRotationConfirmed(false)
+    }
+    try {
+      const receipt = await rotateResellActivationSecret(
+        target.licenseUserId,
+        { reason: submittedReason },
+        idempotencyKey,
+      )
+      if (!shouldAcceptActivationRotationReceipt(
+        rotationGeneration.current,
+        generation,
+        target.licenseUserId,
+        receipt.licenseUserId,
+      )) return
+      setRotationReceipt(receipt)
+      setFreshRotationRequired(false)
+      setFreshRotationConfirmed(false)
+    } catch (error) {
+      if (rotationGeneration.current !== generation) return
+      if (requiresFreshActivationRotation(errorCode(error))) {
+        setFreshRotationRequired(true)
+        setFreshRotationConfirmed(false)
+        setRotationError('이전 재발급은 완료됐지만 일회성 키 응답을 복구할 수 없습니다.')
+      } else {
+        setRotationError(errorMessage(error))
+      }
+    } finally {
+      rotationInFlight.current = false
+      if (rotationGeneration.current === generation) setRotationBusy(false)
+    }
+  }
+
+  const copyActivationSecret = async () => {
+    if (!rotationReceipt) return
+    try {
+      await navigator.clipboard.writeText(rotationReceipt.activationSecret)
+      setSecretCopied(true)
+    } catch {
+      setRotationError('클립보드에 복사하지 못했습니다. 키를 표시한 뒤 직접 복사해 주세요.')
+    }
   }
 
   const availablePlans: LicensePlanType[] = editor?.mode === 'ISSUE'
@@ -405,12 +531,15 @@ export default function LicenseManagement() {
                         ) : <span className="text-sm text-slate-400">—</span>}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        {license ? (
-                          <div className="flex justify-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {license ? (
+                            <>
                             {license.status !== 'REVOKED' && <button className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50" onClick={() => openRenew(user, license)}>{license.planType === 'TRIAL' ? '유료 전환' : license.planType === 'FIXED_TERM' ? '재구매' : '갱신'}</button>}
                             {license.status !== 'REVOKED' && <button className="rounded-lg px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50" onClick={() => { setRevokeTarget(license); setRevokeReason('') }}>중지</button>}
-                          </div>
-                        ) : <button className="rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-slate-800" onClick={() => openIssue(user)}>라이선스 발급</button>}
+                            </>
+                          ) : <button className="rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-slate-800" onClick={() => openIssue(user)}>라이선스 발급</button>}
+                          <button className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800" onClick={() => openRotation(user)}>키 재발급</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -470,6 +599,75 @@ export default function LicenseManagement() {
             <label className="mt-5 block"><span className="mb-1.5 block text-xs font-medium text-slate-600">중지 사유 <span className="text-rose-600">*</span></span><textarea autoFocus className="min-h-24 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-50" placeholder="내부 감사에 남길 사유를 입력하세요." value={revokeReason} maxLength={500} onChange={(event) => setRevokeReason(event.target.value)} /></label>
             {revokeMutation.error && <p className="mt-3 text-xs text-rose-700">{errorMessage(revokeMutation.error)}</p>}
             <div className="mt-5 flex justify-end gap-2"><button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => { setRevokeTarget(null); setRevokeReason('') }}>취소</button><button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-40" disabled={!revokeReason.trim() || revokeMutation.isPending} onClick={() => revokeMutation.mutate({ license: revokeTarget, reason: revokeReason.trim() })}>{revokeMutation.isPending ? '중지 중…' : '중지 확인'}</button></div>
+          </div>
+        </div>
+      )}
+
+      {rotationTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="rotation-title">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">Rotate activation credential</p>
+            <h3 id="rotation-title" className="mt-2 text-lg font-semibold text-slate-950">
+              {rotationReceipt ? '새 활성화 키가 발급되었습니다' : '활성화 키를 재발급할까요?'}
+            </h3>
+            {rotationReceipt ? (
+              <>
+                <p className="mt-2 text-sm leading-6 text-slate-500">이 키는 다시 조회할 수 없습니다. 고객에게 안전한 채널로 전달한 뒤 창을 닫아 주세요. 기존 키와 웹 세션은 더 이상 사용할 수 없습니다.</p>
+                <label className="mt-5 block">
+                  <span className="mb-1.5 block text-xs font-medium text-slate-600">{rotationReceipt.licenseUserId}의 새 활성화 키</span>
+                  <input
+                    className="h-11 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-none focus:border-slate-500"
+                    type={secretVisible ? 'text' : 'password'}
+                    value={rotationReceipt.activationSecret}
+                    readOnly
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </label>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setSecretVisible((value) => !value)}>{secretVisible ? '키 숨기기' : '키 표시'}</button>
+                  <button className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800" onClick={() => void copyActivationSecret()}>{secretCopied ? '복사됨' : '클립보드에 복사'}</button>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-amber-700">클립보드와 화면 공유 기록에도 키가 남을 수 있습니다. 전달 후 클립보드를 다른 값으로 덮어쓰세요.</p>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm leading-6 text-slate-500"><span className="font-mono text-slate-700">{rotationTarget.licenseUserId}</span>의 기존 활성화 키, 웹 세션과 아직 사용하지 않은 페어링을 폐기합니다. 고객 장치가 이미 페어링되어 있다면 장치키는 유지됩니다.</p>
+                <label className="mt-5 block"><span className="mb-1.5 block text-xs font-medium text-slate-600">재발급 사유 <span className="text-rose-600">*</span></span><textarea autoFocus className="min-h-24 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500" placeholder="분실, 노출 의심, 고객 복구 요청 등 감사 사유를 입력하세요." value={rotationReason} minLength={4} maxLength={200} disabled={rotationSubmittedReason !== null || rotationBusy} onChange={(event) => setRotationReason(event.target.value)} /></label>
+                {rotationSubmittedReason && <p className="mt-2 text-xs leading-5 text-slate-400">안전한 재시도를 위해 첫 요청의 사유와 idempotency key를 유지합니다. 사유를 바꾸려면 이 창을 닫고 새 작업을 시작하세요.</p>}
+              </>
+            )}
+            {rotationError && <p className="mt-3 text-xs text-rose-700">{rotationError}</p>}
+            {freshRotationRequired && !rotationReceipt && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
+                <p>같은 요청 키로는 이미 발급된 키를 다시 조회할 수 없습니다. 아래 작업은 확인하지 못한 키를 한 번 더 폐기하고 완전히 새로운 키를 발급합니다.</p>
+                <label className="mt-3 flex items-start gap-2 font-medium">
+                  <input
+                    className="mt-1"
+                    type="checkbox"
+                    checked={freshRotationConfirmed}
+                    disabled={rotationBusy}
+                    onChange={(event) => setFreshRotationConfirmed(event.target.checked)}
+                  />
+                  새 idempotency key로 두 번째 재발급을 실행함을 확인합니다.
+                </label>
+              </div>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={rotationBusy}
+                onClick={closeRotation}
+              >
+                {rotationBusy ? '응답 대기 중…' : rotationReceipt ? '확인 후 닫기' : '취소'}
+              </button>
+              {!rotationReceipt && !freshRotationRequired && (
+                <button className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-40" disabled={rotationReason.trim().length < 4 || rotationBusy} onClick={() => void rotateActivationSecret()}>{rotationBusy ? '재발급 중…' : '기존 키 폐기 후 재발급'}</button>
+              )}
+              {!rotationReceipt && freshRotationRequired && (
+                <button className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-40" disabled={!freshRotationConfirmed || rotationBusy} onClick={() => void rotateActivationSecret(true)}>{rotationBusy ? '다시 재발급 중…' : '확인하고 새 키 재발급'}</button>
+              )}
+            </div>
           </div>
         </div>
       )}
