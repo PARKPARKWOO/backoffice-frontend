@@ -16,6 +16,7 @@ import ComingSoon from './pages/ComingSoon'
 import LicenseManagement from './pages/resell/LicenseManagement'
 import SupportMessages from './pages/resell/SupportMessages'
 import ErrorReports from './pages/resell/ErrorReports'
+import ConnectorKillSwitches from './pages/resell/ConnectorKillSwitches'
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/resell/support-messages/:supportMessageId" element={<SupportMessages />} />
         <Route path="/resell/error-reports" element={<ErrorReports />} />
         <Route path="/resell/error-reports/:errorReportId" element={<ErrorReports />} />
+        <Route path="/resell/connectors" element={<ConnectorKillSwitches />} />
         <Route path="/animal/posts" element={<ComingSoon service="Animal (Find My Pet)" />} />
         <Route path="/storage/files" element={<ComingSoon service="Storage" />} />
       </Route>

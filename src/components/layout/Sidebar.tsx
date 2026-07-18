@@ -33,6 +33,7 @@ const sections: NavSection[] = [
       { label: '라이선스 관리', path: '/resell/licenses' },
       { label: '고객 문의함', path: '/resell/support-messages' },
       { label: '오류 리포트', path: '/resell/error-reports' },
+      { label: 'Connector 긴급 차단', path: '/resell/connectors' },
     ],
   },
   {
